@@ -88,7 +88,7 @@ def second(image,label):
         test_image = np.expand_dims(tf.keras.applications.resnet.preprocess_input(test_image_deprocess), axis=0)
         pred1, pred2= d_model(test_image), q_model(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
-        pred3, = model(test_image)
+        pred3 = model(test_image)
         label3 = np.argmax(pred3[0])
         
         if not label1 == label2:
@@ -101,6 +101,7 @@ def second(image,label):
                 
                 gen_img_deprocessed = test_image_deprocess
                 orig_img_deprocessed = deprocess_image(orig_img.numpy())
+                A = gen_img_deprocessed - orig_img_deprocessed
                 
                 norm = np.max(np.abs(A))
                 
@@ -154,7 +155,7 @@ def secondk(image,k):
         test_image = np.expand_dims(tf.keras.applications.resnet.preprocess_input(test_image_deprocess), axis=0)
         pred1, pred2= d_model(test_image), q_model(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
-        pred3, = model(test_image)
+        pred3 = model(test_image)
         label3 = np.argmax(pred3[0])
         
         if not topk(pred1, pred2, k):
@@ -166,7 +167,7 @@ def secondk(image,k):
                 
                     gen_img_deprocessed = test_image_deprocess
                     orig_img_deprocessed = deprocess_image(orig_img.numpy())
-                
+                    A = gen_img_deprocessed - orig_img_deprocessed
                     norm = np.max(np.abs(A))
                 
                     return total_time, norm, iters, gen_img_deprocessed, A
