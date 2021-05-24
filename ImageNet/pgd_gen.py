@@ -53,7 +53,8 @@ def gen_one_image(image, label, loss_func):
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
         if not label1 == label2:
             if label1 == orig_label and tf.keras.applications.resnet.decode_predictions(pred1.numpy(), top=5)[0][0][2] > 0.6:
-                return (1, 0, A.numpy().astype(np.int8), pred1, pred2)
+                A = test_image_deprocess - deprocess_image(input_image.numpy())
+                return (1, 0, A.astype(np.int8), pred1, pred2)
     
     indicator = 0 # 0: model right q_model wrong; 1: model right q_model wrong; 2: model wrong q_model right; 3: both wrong
     if label1 != orig_label and label2 != orig_label:

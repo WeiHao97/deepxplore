@@ -7,16 +7,7 @@ from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predict
 from tensorflow.keras.models import Model
 from tensorflow.keras.preprocessing import image
 
-
-def preprocess_image(img_path):
-    img = image.load_img(img_path, target_size=(224, 224))
-    input_img_data = image.img_to_array(img)
-    input_img_data = np.expand_dims(input_img_data, axis=0)
-    input_img_data = preprocess_input(input_img_data)  # final input shape = (1,224,224,3)
-    return input_img_data
-
-
-def deprocess_image(x):
+def deprocess_image_resnet(x):
     x = x.reshape((224, 224, 3))
     # Remove zero-center by mean pixel
     x[:, :, 0] += 103.939
@@ -27,6 +18,23 @@ def deprocess_image(x):
     x = np.clip(x, 0, 255).astype('uint8')
     return x
 
+def deprocess_image_mobilenet(x):
+    x = x.reshape((224, 224, 3))
+    x += 1.0
+    x *= 127.5
+    x = np.clip(x, 0, 255).astype('uint8')
+    return x
+
+def deprocess_image_densenet(x):
+    x = x.reshape((224, 224, 3))
+    x[..., 0] /= 0.229
+    x[..., 1] /= 0.224
+    x[..., 2] /= 0.225
+    x[:, :, 0] += 0.485 
+    x[:, :, 1] += 0.456
+    x[:, :, 2] += 0.406
+    x = np.clip(x, 0, 255).astype('uint8')
+    return x
 
 def decode_label(pred):
     return decode_predictions(pred)[0][0][1]
