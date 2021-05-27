@@ -1,6 +1,6 @@
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 import PIL
 import tensorflow as tf
@@ -13,7 +13,6 @@ enable_eager_execution()
 import matplotlib.pyplot as plt
 from tensorflow import keras
 from tensorflow.keras import layers
-from tensorflow.keras.applications.resnet50 import ResNet50
 import tensorflow_datasets as tfds
 import argparse
 from tensorflow.keras.layers import Input
@@ -22,6 +21,7 @@ import scipy.misc
 from configs import bcolors
 from utils import *
 import tensorflow_model_optimization as tfmot
+from tensorflow.keras.applications.resnet50 import ResNet50
 
 import time
 
@@ -35,34 +35,33 @@ epsilon = 8
 es = {'file_name': tf.TensorSpec(shape=(), dtype=tf.string, name=None),
  'image': tf.TensorSpec(shape=(224, 224, 3), dtype=tf.float32, name=None),
  'label': tf.TensorSpec(shape=(), dtype=tf.int64, name=None)}
-mydataset = tf.data.experimental.load("/local/rcs/wei/Avg3ImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
+mydataset = tf.data.experimental.load("/local/rcs/wei/Final3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
 
 # input image dimensions
 
 img_rows, img_cols = 224 ,224
-input_shape = (img_rows, img_cols, 3)
-model_ = ResNet50(input_shape=input_shape)
-
+model_ = tf.keras.applications.MobileNet(input_shape= (img_rows, img_cols,3))
 q_model = tfmot.quantization.keras.quantize_model(model_)
-model = ResNet50(input_tensor = q_model.input)
-d_model = ResNet50(input_tensor = q_model.input)
-model.load_weights("./fp_model_40_resnet50.h5")
-q_model.load_weights("./q_model_40_resnet50.h5")
-d_model.load_weights("./distilled_fp_model_40_resnet50.h5")
+model = tf.keras.applications.MobileNet(input_tensor = q_model.input)
+d_model = tf.keras.applications.MobileNet(input_tensor = q_model.input)
+model.load_weights("./fp_model_40_mobilenet.h5")
+q_model.load_weights("./q_model_40_mobilenet.h5")
+d_model.load_weights("./distilled_fp_model_40_mobilenet.h5")
+
+preprocess = tf.keras.applications.mobilenet.preprocess_input
 
 def second(image,label):
-    image = np.expand_dims(image, axis=0)
-    input_image = tf.convert_to_tensor(image)
-    orig_img = tf.identity(input_image)
-    
-    orig_logist = tf.identity(model(image))
+    input_image = image
+    orig_logist = tf.identity(model(preprocess(input_image)[None,...]) )
     orig_label =  np.argmax(orig_logist[0])
+
     
-    quant_logist = tf.identity(q_model(image))
+    quant_logist = tf.identity(q_model(preprocess(input_image)[None,...]))
     quant_label =  np.argmax(quant_logist[0])
 
-    d_logist = tf.identity(d_model(image))
+    d_logist =  tf.identity(d_model(preprocess(input_image)[None,...]))
     d_label =  np.argmax(d_logist[0])
+
     
     if orig_label != quant_label or orig_label != d_label:
         print(orig_label)
@@ -76,16 +75,16 @@ def second(image,label):
     for iters in range(0,grad_iterations):
         with tf.GradientTape() as g:
             g.watch(input_image)
-            loss1 = K.mean(d_model(input_image+A)[..., orig_label])
-            loss2 = K.mean(q_model(input_image+A)[..., orig_label])
+            loss1 = K.mean(d_model(preprocess(input_image+A)[None,...])[..., orig_label])
+            loss2 = K.mean(q_model(preprocess(input_image+A)[None,...])[..., orig_label])
             final_loss = K.mean(loss1 - c*loss2)
 
 
         grads = normalize(g.gradient(final_loss, input_image))
         A += tf.sign(grads) * step
         A = tf.clip_by_value(A, -epsilon, epsilon)
-        test_image_deprocess = deprocess_image((input_image + A).numpy())
-        test_image = np.expand_dims(tf.keras.applications.resnet.preprocess_input(test_image_deprocess), axis=0)
+        test_image_deprocess = tf.clip_by_value(input_image  + A, 0, 255)
+        test_image = preprocess(test_image_deprocess)[None,...]
         pred1, pred2= d_model(test_image), q_model(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
         pred3 = model(test_image)
@@ -93,15 +92,16 @@ def second(image,label):
         
         if not label1 == label2:
             if label1 == orig_label and tf.keras.applications.resnet.decode_predictions(pred1.numpy(), top=1)[0][0][2] > 0.6:
-                
+
                 if label3 != orig_label:
                     return -1, -1, -1, -1, -1
+                
 
                 total_time = time.time() - start_time
                 
                 gen_img_deprocessed = test_image_deprocess
-                orig_img_deprocessed = deprocess_image(orig_img.numpy())
-                A = gen_img_deprocessed - orig_img_deprocessed
+                orig_img_deprocessed = input_image
+                A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
                 
                 norm = np.max(np.abs(A))
                 
@@ -119,20 +119,16 @@ def topk(model_pred, qmodel_pred, k):
     return False
 
 def secondk(image,k):
-    image = np.expand_dims(image, axis=0)
-    input_image = tf.convert_to_tensor(image)
-    orig_img = tf.identity(input_image)
-    
-    orig_logist = tf.identity(model(image))
+    input_image = image
+    orig_logist = tf.identity(model(preprocess(input_image)[None,...]) )
     orig_label =  np.argmax(orig_logist[0])
+
     
-    quant_logist = tf.identity(q_model(image))
+    quant_logist = tf.identity(q_model(preprocess(input_image)[None,...]))
     quant_label =  np.argmax(quant_logist[0])
 
-    d_logist = tf.identity(d_model(image))
+    d_logist =  tf.identity(d_model(preprocess(input_image)[None,...]))
     d_label =  np.argmax(d_logist[0])
-
-    input_image = tf.convert_to_tensor(image)
 
     
     if orig_label != quant_label or orig_label != d_label:
@@ -143,16 +139,16 @@ def secondk(image,k):
     for iters in range(0,grad_iterations):
         with tf.GradientTape() as g:
             g.watch(input_image)
-            loss1 = K.mean(d_model(input_image+A)[..., orig_label])
-            loss2 = K.mean(q_model(input_image+A)[..., orig_label])
+            loss1 = K.mean(d_model(preprocess(input_image+A)[None,...])[..., orig_label])
+            loss2 = K.mean(q_model(preprocess(input_image+A)[None,...])[..., orig_label])
             final_loss = K.mean(loss1 - c*loss2)
 
 
         grads = normalize(g.gradient(final_loss, input_image))
         A += tf.sign(grads) * step
         A = tf.clip_by_value(A, -epsilon, epsilon)
-        test_image_deprocess = deprocess_image((input_image + A).numpy())
-        test_image = np.expand_dims(tf.keras.applications.resnet.preprocess_input(test_image_deprocess), axis=0)
+        test_image_deprocess = tf.clip_by_value(input_image  + A, 0, 255)
+        test_image = preprocess(test_image_deprocess)[None,...]
         pred1, pred2= d_model(test_image), q_model(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
         pred3 = model(test_image)
@@ -161,20 +157,19 @@ def secondk(image,k):
         if not topk(pred1, pred2, k):
             if label1 == orig_label and tf.keras.applications.resnet.decode_predictions(pred1.numpy(), top=1)[0][0][2] > 0.6:
 
-                if label3 == orig_label and tf.keras.applications.resnet.decode_predictions(pred3.numpy(), top=1)[0][0][2] > 0.6 and not topk(pred3, pred2, k):
+                if label3 == orig_label and not topk(pred3, pred2, k):
         
                     total_time = time.time() - start_time
                 
                     gen_img_deprocessed = test_image_deprocess
-                    orig_img_deprocessed = deprocess_image(orig_img.numpy())
-                    A = gen_img_deprocessed - orig_img_deprocessed
+                    orig_img_deprocessed = input_image
+                    A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
                     norm = np.max(np.abs(A))
                 
                     return total_time, norm, iters, gen_img_deprocessed, A
 
                 else:
                     return -1, -1, -1, -1, -1
-
             
     return -1, -1, -1, -1, -1
 
@@ -276,4 +271,4 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
 
 
 calc_normal_success(second,secondk,mydataset,
-                   folderName='resnet_imagenet_images_second', filterName='resnet_imagenet_filters_second',dataName='second', dataFolder='resnet_imagenet_data_second', locald ='/local/rcs/wei/semi_black_box/resenet50/' )
+                   folderName='mobilenet_imagenet_images_second', filterName='mobilenet_imagenet_filters_second',dataName='second', dataFolder='mobilenet_imagenet_data_second', locald ='/local/rcs/wei/semi_black_box/mobilenet/' )

@@ -21,6 +21,7 @@ import scipy.misc
 from configs import bcolors
 from utils import *
 import tensorflow_model_optimization as tfmot
+from tensorflow.keras.applications.resnet50 import ResNet50
 
 import time
 
@@ -34,32 +35,29 @@ epsilon = 8
 es = {'file_name': tf.TensorSpec(shape=(), dtype=tf.string, name=None),
  'image': tf.TensorSpec(shape=(224, 224, 3), dtype=tf.float32, name=None),
  'label': tf.TensorSpec(shape=(), dtype=tf.int64, name=None)}
-mydataset = tf.data.experimental.load("/local/rcs/wei/Avg3ImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
+mydataset = tf.data.experimental.load("/local/rcs/wei/Final3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
 
 # input image dimensions
 
 img_rows, img_cols = 224 ,224
-model = tf.keras.applications.MobileNet(input_shape=(img_rows, img_cols,3))
-model.compile(optimizer=tf.keras.optimizers.RMSprop(lr=2e-5),
-            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-              metrics=['accuracy'])
-
-q_model = tfmot.quantization.keras.quantize_model(model)
+model_ = tf.keras.applications.MobileNet(input_shape= (img_rows, img_cols,3))
+q_model = tfmot.quantization.keras.quantize_model(model_)
 q_model.compile(optimizer=tf.keras.optimizers.RMSprop(lr=2e-5),
             loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
               metrics=['accuracy'])
+model = tf.keras.applications.MobileNet(input_tensor = q_model.input)
 model.load_weights("./fp_model_40_mobilenet.h5")
+
 q_model.load_weights("./q_model_40_mobilenet.h5")
+preprocess = tf.keras.applications.mobilenet.preprocess_input
 
 def second(image,label):
-    image = np.expand_dims(image, axis=0)
-    input_image = tf.convert_to_tensor(image)
-    orig_img = tf.identity(input_image)
-    
-    orig_logist = tf.identity(model(image))
+    input_image = image
+    orig_logist = tf.identity(model(preprocess(input_image)[None,...]) )
     orig_label =  np.argmax(orig_logist[0])
+
     
-    quant_logist = tf.identity(q_model(image))
+    quant_logist = tf.identity(q_model(preprocess(input_image)[None,...]))
     quant_label =  np.argmax(quant_logist[0])
 
     
@@ -75,16 +73,16 @@ def second(image,label):
     for iters in range(0,grad_iterations):
         with tf.GradientTape() as g:
             g.watch(input_image)
-            loss1 = K.mean(model(input_image+A)[..., orig_label])
-            loss2 = K.mean(q_model(input_image+A)[..., orig_label])
+            loss1 = K.mean(model(preprocess(input_image+A)[None,...])[..., orig_label])
+            loss2 = K.mean(q_model(preprocess(input_image+A)[None,...])[..., orig_label])
             final_loss = K.mean(loss1 - c*loss2)
 
 
         grads = normalize(g.gradient(final_loss, input_image))
         A += tf.sign(grads) * step
         A = tf.clip_by_value(A, -epsilon, epsilon)
-        test_image_deprocess = deprocess_image((input_image + A).numpy())
-        test_image = np.expand_dims(tf.keras.applications.resnet.preprocess_input(test_image_deprocess), axis=0)
+        test_image_deprocess = tf.clip_by_value(input_image  + A, 0, 255)
+        test_image = preprocess(test_image_deprocess)[None,...]
         pred1, pred2= model(test_image), q_model(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
         
@@ -95,8 +93,8 @@ def second(image,label):
                 total_time = time.time() - start_time
                 
                 gen_img_deprocessed = test_image_deprocess
-                orig_img_deprocessed = deprocess_image(orig_img.numpy())
-                A = gen_img_deprocessed - orig_img_deprocessed
+                orig_img_deprocessed = input_image
+                A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
                 
                 norm = np.max(np.abs(A))
                 
@@ -114,14 +112,13 @@ def topk(model_pred, qmodel_pred, k):
     return False
 
 def secondk(image,k):
-    image = np.expand_dims(image, axis=0)
-    input_image = tf.convert_to_tensor(image)
+    input_image = image
     orig_img = tf.identity(input_image)
-    
-    orig_logist = tf.identity(model(image))
+    orig_logist = tf.identity(model(preprocess(input_image)[None,...]))
     orig_label =  np.argmax(orig_logist[0])
+
     
-    quant_logist = tf.identity(q_model(image))
+    quant_logist = tf.identity(q_model(preprocess(input_image)[None,...]))
     quant_label =  np.argmax(quant_logist[0])
 
     
@@ -133,16 +130,16 @@ def secondk(image,k):
     for iters in range(0,grad_iterations):
         with tf.GradientTape() as g:
             g.watch(input_image)
-            loss1 = K.mean(model(input_image+A)[..., orig_label])
-            loss2 = K.mean(q_model(input_image+A)[..., orig_label])
+            loss1 = K.mean(model(preprocess(input_image+A)[None,...])[..., orig_label])
+            loss2 = K.mean(q_model(preprocess(input_image+A)[None,...])[..., orig_label])
             final_loss = K.mean(loss1 - c*loss2)
 
 
         grads = normalize(g.gradient(final_loss, input_image))
         A += tf.sign(grads) * step
         A = tf.clip_by_value(A, -epsilon, epsilon)
-        test_image_deprocess = deprocess_image((input_image + A).numpy())
-        test_image = np.expand_dims(tf.keras.applications.resnet.preprocess_input(test_image_deprocess), axis=0)
+        test_image_deprocess = tf.clip_by_value(input_image  + A, 0, 255)
+        test_image = preprocess(test_image_deprocess)[None,...]
         pred1, pred2= model(test_image), q_model(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
         
@@ -152,8 +149,8 @@ def secondk(image,k):
                 total_time = time.time() - start_time
                 
                 gen_img_deprocessed = test_image_deprocess
-                orig_img_deprocessed = deprocess_image(orig_img.numpy())
-                A = gen_img_deprocessed - orig_img_deprocessed
+                orig_img_deprocessed = input_image
+                A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
                 norm = np.max(np.abs(A))
                 
                 return total_time, norm, iters, gen_img_deprocessed, A
