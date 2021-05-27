@@ -51,7 +51,7 @@ def apply_quantization(layer):
     else:
         return layer
 
-mode = 'd'
+mode = 'r'
 BATCH_SIZE = 50
 c = 1
 grad_iterations = 20
@@ -79,6 +79,7 @@ if mode == 'm':
     d_model.load_weights("./distilled_fp_model_40_mobilenet.h5")
     preprocess = tf.keras.applications.mobilenet.preprocess_input
     decode = tf.keras.applications.mobilenet.decode_predictions
+    net = 'mobile'
 
 elif mode == 'r':
     model_ = ResNet50(input_shape= (img_rows, img_cols,3))
@@ -90,6 +91,7 @@ elif mode == 'r':
     d_model.load_weights("./distilled_fp_model_40_resnet50.h5")
     preprocess = tf.keras.applications.resnet.preprocess_input
     decode = tf.keras.applications.resnet.decode_predictions
+    net = 'res'
 
 else:
 
@@ -119,6 +121,7 @@ else:
     d_model.load_weights("./distilled_fp_model_40_densenet121.h5")
     preprocess = tf.keras.applications.densenet.preprocess_input
     decode = tf.keras.applications.densenet.decode_predictions
+    net = 'dense'
 
 
 
@@ -343,4 +346,4 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
 
 
 calc_normal_success(second,secondk,mydataset,
-                   folderName='densenet_imagenet_images_second', filterName='densenet_imagenet_filters_second',dataName='second', dataFolder='densenet_imagenet_data_second', locald ='/local/rcs/wei/semi_black_box/densenet/' )
+                   folderName=net + 'net_imagenet_images_second', filterName=net +'net_imagenet_filters_second',dataName='second', dataFolder=net +'net_imagenet_data_second', locald ='/local/rcs/wei/semi_black_box/' + net + 'net/' )

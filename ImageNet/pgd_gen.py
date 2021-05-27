@@ -1,6 +1,6 @@
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="2"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 import PIL
 import tensorflow as tf
@@ -31,6 +31,7 @@ c = 1
 grad_iterations = 20
 step = 1
 epsilon = 8
+mode = 'r'
 
 es = {'file_name': tf.TensorSpec(shape=(), dtype=tf.string, name=None),
  'image': tf.TensorSpec(shape=(224, 224, 3), dtype=tf.float32, name=None),
@@ -40,24 +41,59 @@ mydataset = tf.data.experimental.load("/local/rcs/wei/Final3kImagePerClass/",es)
 # input image dimensions
 
 img_rows, img_cols = 224 ,224
-model_ = ResNet50(input_shape= (img_rows, img_cols,3))
-q_model = tfmot.quantization.keras.quantize_model(model_)
-q_model.compile(optimizer=tf.keras.optimizers.RMSprop(lr=2e-5),
-            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-              metrics=['accuracy'])
-model = ResNet50(input_tensor = q_model.input)
-model.load_weights("./fp_model_40_resnet50.h5")
 
-q_model.load_weights("./q_model_40_resnet50.h5")
-preprocess = tf.keras.applications.resnet.preprocess_input
+if mode == 'm':
+    model_ = tf.keras.applications.MobileNet(input_shape= (img_rows, img_cols,3))
+    q_model = tfmot.quantization.keras.quantize_model(model_)
+    model = tf.keras.applications.MobileNet(input_tensor = q_model.input)
+    model.load_weights("./fp_model_40_mobilenet.h5")
+    q_model.load_weights("./q_model_40_mobilenet.h5")
+    preprocess = tf.keras.applications.mobilenet.preprocess_input
+    decode = tf.keras.applications.mobilenet.decode_predictions
+
+elif mode == 'r':
+    model_ = ResNet50(input_shape= (img_rows, img_cols,3))
+    q_model = tfmot.quantization.keras.quantize_model(model_)
+    model = ResNet50(input_tensor = q_model.input)
+    model.load_weights("./fp_model_40_resnet50.h5")
+    q_model.load_weights("./q_model_40_resnet50.h5")
+    preprocess = tf.keras.applications.resnet.preprocess_input
+    decode = tf.keras.applications.resnet.decode_predictions
+
+else:
+
+    model_ = tf.keras.applications.DenseNet121(input_shape=(img_rows, img_cols,3))
+    # Create a base model
+    base_model = model_
+    # Helper function uses `quantize_annotate_layer` to annotate that only the 
+    # Dense layers should be quantized.
+
+    LastValueQuantizer = tfmot.quantization.keras.quantizers.LastValueQuantizer
+    MovingAverageQuantizer = tfmot.quantization.keras.quantizers.MovingAverageQuantizer
+    
+    # Use `tf.keras.models.clone_model` to apply `apply_quantization_to_dense` 
+    # to the layers of the model.
+    annotated_model = tf.keras.models.clone_model(
+        base_model,
+        clone_function=apply_quantization,
+    )
+
+    with tfmot.quantization.keras.quantize_scope( {'DefaultBNQuantizeConfig':DefaultBNQuantizeConfig}):
+        q_model = tfmot.quantization.keras.quantize_apply(annotated_model)
+
+    model = tf.keras.applications.DenseNet121(input_tensor = q_model.input)
+    model.load_weights("./fp_model_40_densenet121.h5")
+    q_model.load_weights("./q_model_40_densenet121.h5")
+    preprocess = tf.keras.applications.densenet.preprocess_input
+    decode = tf.keras.applications.densenet.decode_predictions
 
 def second(image,label):
     input_image = image
-    orig_logist = tf.identity(model(preprocess(input_image)[None,...]) )
+    orig_logist = tf.identity(model.predict(preprocess(input_image)[None,...]) )
     orig_label =  np.argmax(orig_logist[0])
 
     
-    quant_logist = tf.identity(q_model(preprocess(input_image)[None,...]))
+    quant_logist = tf.identity(q_model.predict(preprocess(input_image)[None,...]))
     quant_label =  np.argmax(quant_logist[0])
 
     
@@ -81,11 +117,11 @@ def second(image,label):
         A = tf.clip_by_value(A, -epsilon, epsilon)
         test_image_deprocess = tf.clip_by_value(input_image + A, 0, 255)
         test_image = preprocess(test_image_deprocess)[None,...]
-        pred1, pred2= model(test_image), q_model(test_image)
+        pred1, pred2= model.predict(test_image), q_model.predict(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
         
         if not label1 == label2:
-            if label1 == orig_label and tf.keras.applications.resnet.decode_predictions(pred1.numpy(), top=1)[0][0][2] > 0.6:
+            if label1 == orig_label and decode(pred1, top=1)[0][0][2] > 0.6:
                 
 
                 total_time = time.time() - start_time
@@ -100,8 +136,8 @@ def second(image,label):
     return -1, -1, -1, -1, -1
 
 def topk(model_pred, qmodel_pred, k):
-    preds = tf.keras.applications.resnet.decode_predictions(model_pred.numpy(), top=k)
-    qpreds = tf.keras.applications.resnet.decode_predictions(qmodel_pred.numpy(), top=1)[0][0][1]
+    preds = decode(model_pred, top=k)
+    qpreds = decode(qmodel_pred, top=1)[0][0][1]
     
     for pred in preds[0]:
         if pred[1] == qpreds:
@@ -112,11 +148,11 @@ def topk(model_pred, qmodel_pred, k):
 def secondk(image,k):
     input_image = image
     orig_img = tf.identity(input_image)
-    orig_logist = tf.identity(model(preprocess(input_image)[None,...]))
+    orig_logist = tf.identity(model.predict(preprocess(input_image)[None,...]))
     orig_label =  np.argmax(orig_logist[0])
 
     
-    quant_logist = tf.identity(q_model(preprocess(input_image)[None,...]))
+    quant_logist = tf.identity(q_model.predict(preprocess(input_image)[None,...]))
     quant_label =  np.argmax(quant_logist[0])
 
     
@@ -136,11 +172,11 @@ def secondk(image,k):
         A = tf.clip_by_value(A, -epsilon, epsilon)
         test_image_deprocess = tf.clip_by_value(input_image + A, 0, 255)
         test_image = preprocess(test_image_deprocess)[None,...]
-        pred1, pred2= model(test_image), q_model(test_image)
+        pred1, pred2= model.predict(test_image), q_model.predict(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
         
         if not topk(pred1, pred2, k):
-            if label1 == orig_label and tf.keras.applications.resnet.decode_predictions(pred1.numpy(), top=1)[0][0][2] > 0.6:
+            if label1 == orig_label and decode(pred1, top=1)[0][0][2] > 0.6:
         
                 total_time = time.time() - start_time
                 
