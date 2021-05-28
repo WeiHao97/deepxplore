@@ -1,6 +1,6 @@
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="3"
+os.environ["CUDA_VISIBLE_DEVICES"]="2"
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 import PIL
 import tensorflow as tf
@@ -45,18 +45,44 @@ class DefaultBNQuantizeConfig(tfmot.quantization.keras.QuantizeConfig):
         return {}
     
     
+class NoOpQuantizeConfig(tfmot.quantization.keras.QuantizeConfig):
+    """Use this config object if the layer has nothing to be quantized for 
+    quantization aware training."""
+
+    def get_weights_and_quantizers(self, layer):
+        return []
+
+    def get_activations_and_quantizers(self, layer):
+        return []
+
+    def set_quantize_weights(self, layer, quantize_weights):
+        pass
+
+    def set_quantize_activations(self, layer, quantize_activations):
+        pass
+
+    def get_output_quantizers(self, layer):
+        # Does not quantize output, since we return an empty list.
+        return []
+
+    def get_config(self):
+        return {}
+    
+    
 def apply_quantization(layer):
     if 'bn'  in layer.name:
         return tfmot.quantization.keras.quantize_annotate_layer(layer,DefaultBNQuantizeConfig())
+    elif 'concat' in layer.name:
+        return tfmot.quantization.keras.quantize_annotate_layer(layer,NoOpQuantizeConfig())
     else:
-        return layer
+        return tfmot.quantization.keras.quantize_annotate_layer(layer)
 
 BATCH_SIZE = 50
 c = 1
 grad_iterations = 20
 step = 1
 epsilon = 8
-mode = 'm'
+mode = 'd'
 
 es = {'file_name': tf.TensorSpec(shape=(), dtype=tf.string, name=None),
  'image': tf.TensorSpec(shape=(224, 224, 3), dtype=tf.float32, name=None),
@@ -109,7 +135,7 @@ else:
         clone_function=apply_quantization,
     )
 
-    with tfmot.quantization.keras.quantize_scope( {'DefaultBNQuantizeConfig':DefaultBNQuantizeConfig}):
+    with tfmot.quantization.keras.quantize_scope({'DefaultBNQuantizeConfig': DefaultBNQuantizeConfig, 'NoOpQuantizeConfig': NoOpQuantizeConfig}):
         q_model = tfmot.quantization.keras.quantize_apply(annotated_model)
 
     model = tf.keras.applications.DenseNet121(input_tensor = q_model.input)

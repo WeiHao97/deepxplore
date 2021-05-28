@@ -44,11 +44,37 @@ class DefaultBNQuantizeConfig(tfmot.quantization.keras.QuantizeConfig):
         return {}
     
     
+class NoOpQuantizeConfig(tfmot.quantization.keras.QuantizeConfig):
+    """Use this config object if the layer has nothing to be quantized for 
+    quantization aware training."""
+
+    def get_weights_and_quantizers(self, layer):
+        return []
+
+    def get_activations_and_quantizers(self, layer):
+        return []
+
+    def set_quantize_weights(self, layer, quantize_weights):
+        pass
+
+    def set_quantize_activations(self, layer, quantize_activations):
+        pass
+
+    def get_output_quantizers(self, layer):
+        # Does not quantize output, since we return an empty list.
+        return []
+
+    def get_config(self):
+        return {}
+    
+    
 def apply_quantization(layer):
     if 'bn'  in layer.name:
         return tfmot.quantization.keras.quantize_annotate_layer(layer,DefaultBNQuantizeConfig())
+    elif 'concat' in layer.name:
+        return tfmot.quantization.keras.quantize_annotate_layer(layer,NoOpQuantizeConfig())
     else:
-        return layer
+        return tfmot.quantization.keras.quantize_annotate_layer(layer)
 
 # input image dimensions
 img_rows, img_cols = 224 ,224
@@ -109,7 +135,7 @@ else:
         clone_function=apply_quantization,
     )
 
-    with tfmot.quantization.keras.quantize_scope( {'DefaultBNQuantizeConfig':DefaultBNQuantizeConfig}):
+    with tfmot.quantization.keras.quantize_scope({'DefaultBNQuantizeConfig': DefaultBNQuantizeConfig, 'NoOpQuantizeConfig': NoOpQuantizeConfig}):
         q_model = tfmot.quantization.keras.quantize_apply(annotated_model)
 
     model = tf.keras.applications.DenseNet121(input_tensor = q_model.input)
