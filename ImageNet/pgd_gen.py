@@ -1,6 +1,6 @@
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="2"
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 import PIL
 import tensorflow as tf
@@ -87,7 +87,7 @@ mode = 'd'
 es = {'file_name': tf.TensorSpec(shape=(), dtype=tf.string, name=None),
  'image': tf.TensorSpec(shape=(224, 224, 3), dtype=tf.float32, name=None),
  'label': tf.TensorSpec(shape=(), dtype=tf.int64, name=None)}
-mydataset = tf.data.experimental.load("/local/rcs/wei/Last3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
+mydataset = tf.data.experimental.load("/local/rcs/wei/End3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
 
 # input image dimensions
 

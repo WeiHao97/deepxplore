@@ -89,7 +89,7 @@ mode = 'r'
 es = {'file_name': tf.TensorSpec(shape=(), dtype=tf.string, name=None),
  'image': tf.TensorSpec(shape=(224, 224, 3), dtype=tf.float32, name=None),
  'label': tf.TensorSpec(shape=(), dtype=tf.int64, name=None)}
-mydataset = tf.data.experimental.load("/local/rcs/wei/Last3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
+mydataset = tf.data.experimental.load("/local/rcs/wei/End3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
 
 
 

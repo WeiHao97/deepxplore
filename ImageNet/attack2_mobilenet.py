@@ -1,6 +1,6 @@
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 import PIL
 import tensorflow as tf
@@ -89,7 +89,7 @@ mode = 'r'
 es = {'file_name': tf.TensorSpec(shape=(), dtype=tf.string, name=None),
  'image': tf.TensorSpec(shape=(224, 224, 3), dtype=tf.float32, name=None),
  'label': tf.TensorSpec(shape=(), dtype=tf.int64, name=None)}
-mydataset = tf.data.experimental.load("/local/rcs/wei/Last3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
+mydataset = tf.data.experimental.load("/local/rcs/wei/End3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
 
 
 
@@ -299,8 +299,8 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
                 continue
 
             count += 1
-            #np.save(locald+folderName+"/"+dataName+str(count)+"@"+str(total)+".npy", gen)
-            #np.save(locald+filterName+"/"+dataName+str(count)+"@"+str(total)+".npy", A)
+            np.save(locald+folderName+"/"+dataName+str(count)+"@"+str(total)+".npy", gen)
+            np.save(locald+filterName+"/"+dataName+str(count)+"@"+str(total)+".npy", A)
             
             timeStore.append(time)
             advdistStore.append(advdist)
@@ -329,8 +329,8 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
             
             top5 += 1
             
-            #np.save(locald+folderName+"/"+dataName+"k"+str(count)+".npy", gen)
-            #np.save(locald+filterName+"/"+dataName+"k"+str(count)+".npy", A)
+            np.save(locald+folderName+"/"+dataName+"k"+str(count)+".npy", gen)
+            np.save(locald+filterName+"/"+dataName+"k"+str(count)+".npy", A)
             
             timeStorek.append(time)
             advdistStorek.append(advdist)
