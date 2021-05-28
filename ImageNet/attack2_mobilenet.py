@@ -63,7 +63,7 @@ mode = 'r'
 es = {'file_name': tf.TensorSpec(shape=(), dtype=tf.string, name=None),
  'image': tf.TensorSpec(shape=(224, 224, 3), dtype=tf.float32, name=None),
  'label': tf.TensorSpec(shape=(), dtype=tf.int64, name=None)}
-mydataset = tf.data.experimental.load("/local/rcs/wei/Final3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
+mydataset = tf.data.experimental.load("/local/rcs/wei/Last3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
 
 
 
@@ -143,8 +143,8 @@ def second(image,label):
     for iters in range(0,grad_iterations):
         with tf.GradientTape() as g:
             g.watch(input_image)
-            loss1 = K.mean(model(preprocess(input_image+A)[None,...])[..., orig_label])
-            loss2 = K.mean(q_model(preprocess(input_image+A)[None,...])[..., orig_label])
+            loss1 = K.mean(model(preprocess(input_image+A)[None,...], training = False)[..., orig_label])
+            loss2 = K.mean(q_model(preprocess(input_image+A)[None,...], training = False)[..., orig_label])
             final_loss = K.mean(loss1 - c*loss2)
 
 
@@ -200,8 +200,8 @@ def secondk(image,k):
     for iters in range(0,grad_iterations):
         with tf.GradientTape() as g:
             g.watch(input_image)
-            loss1 = K.mean(model(preprocess(input_image+A)[None,...])[..., orig_label])
-            loss2 = K.mean(q_model(preprocess(input_image+A)[None,...])[..., orig_label])
+            loss1 = K.mean(model(preprocess(input_image+A)[None,...], training = False)[..., orig_label])
+            loss2 = K.mean(q_model(preprocess(input_image+A)[None,...], training = False)[..., orig_label])
             final_loss = K.mean(loss1 - c*loss2)
 
 

@@ -1,6 +1,6 @@
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 import PIL
 import tensorflow as tf
@@ -61,7 +61,7 @@ mode = 'm'
 es = {'file_name': tf.TensorSpec(shape=(), dtype=tf.string, name=None),
  'image': tf.TensorSpec(shape=(224, 224, 3), dtype=tf.float32, name=None),
  'label': tf.TensorSpec(shape=(), dtype=tf.int64, name=None)}
-mydataset = tf.data.experimental.load("/local/rcs/wei/Final3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
+mydataset = tf.data.experimental.load("/local/rcs/wei/Last3kImagePerClass/",es).batch(BATCH_SIZE).prefetch(1)
 
 # input image dimensions
 
@@ -144,7 +144,7 @@ def second(image,label):
         with tf.GradientTape() as g:
             g.watch(input_image)
             ad_img = preprocess(input_image + A)[None,...]
-            final_loss = tf.keras.losses.categorical_crossentropy(orig_logist[0] , q_model(ad_img)[0])
+            final_loss = tf.keras.losses.categorical_crossentropy(orig_logist[0] , q_model(ad_img, training = False)[0])
 
         grads = normalize(g.gradient(final_loss, input_image))
         A += tf.sign(grads) * step
@@ -199,7 +199,7 @@ def secondk(image,k):
         with tf.GradientTape() as g:
             g.watch(input_image)
             ad_img = preprocess(input_image + A)[None,...]
-            final_loss = tf.keras.losses.categorical_crossentropy(orig_logist[0] , q_model(ad_img)[0])
+            final_loss = tf.keras.losses.categorical_crossentropy(orig_logist[0] , q_model(ad_img, training = False)[0])
 
         grads = normalize(g.gradient(final_loss, input_image))
         A += tf.sign(grads) * step
