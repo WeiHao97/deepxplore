@@ -1,6 +1,6 @@
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 import PIL
 import tensorflow as tf
@@ -26,12 +26,37 @@ from tensorflow.keras.applications.resnet50 import ResNet50
 import time
 
 
+class DefaultBNQuantizeConfig(tfmot.quantization.keras.QuantizeConfig):
+
+    def get_weights_and_quantizers(self, layer):
+        return []
+
+    def get_activations_and_quantizers(self, layer):
+        return []
+
+    def set_quantize_weights(self, layer, quantize_weights):
+        pass
+    def set_quantize_activations(self, layer, quantize_activations):
+        pass
+    def get_output_quantizers(self, layer):
+        return [tfmot.quantization.keras.quantizers.MovingAverageQuantizer(num_bits=8, per_axis=False, symmetric=False, narrow_range=False)]
+
+    def get_config(self):
+        return {}
+    
+    
+def apply_quantization(layer):
+    if 'bn'  in layer.name:
+        return tfmot.quantization.keras.quantize_annotate_layer(layer,DefaultBNQuantizeConfig())
+    else:
+        return layer
+
 BATCH_SIZE = 50
 c = 1
 grad_iterations = 20
 step = 1
 epsilon = 8
-mode = 'r'
+mode = 'm'
 
 es = {'file_name': tf.TensorSpec(shape=(), dtype=tf.string, name=None),
  'image': tf.TensorSpec(shape=(224, 224, 3), dtype=tf.float32, name=None),
@@ -48,8 +73,11 @@ if mode == 'm':
     model = tf.keras.applications.MobileNet(input_tensor = q_model.input)
     model.load_weights("./fp_model_40_mobilenet.h5")
     q_model.load_weights("./q_model_40_mobilenet.h5")
+    model.trainable = False
+    q_model.trainable = False
     preprocess = tf.keras.applications.mobilenet.preprocess_input
     decode = tf.keras.applications.mobilenet.decode_predictions
+    net = 'mobile'
 
 elif mode == 'r':
     model_ = ResNet50(input_shape= (img_rows, img_cols,3))
@@ -57,8 +85,11 @@ elif mode == 'r':
     model = ResNet50(input_tensor = q_model.input)
     model.load_weights("./fp_model_40_resnet50.h5")
     q_model.load_weights("./q_model_40_resnet50.h5")
+    model.trainable = False
+    q_model.trainable = False
     preprocess = tf.keras.applications.resnet.preprocess_input
     decode = tf.keras.applications.resnet.decode_predictions
+    net = 'res'
 
 else:
 
@@ -84,8 +115,11 @@ else:
     model = tf.keras.applications.DenseNet121(input_tensor = q_model.input)
     model.load_weights("./fp_model_40_densenet121.h5")
     q_model.load_weights("./q_model_40_densenet121.h5")
+    model.trainable = False
+    q_model.trainable = False
     preprocess = tf.keras.applications.densenet.preprocess_input
     decode = tf.keras.applications.densenet.decode_predictions
+    net = 'dense'
 
 def second(image,label):
     input_image = image
@@ -287,4 +321,4 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
 
 
 calc_normal_success(second,secondk,mydataset,
-                   folderName='resnet_imagenet_images_second', filterName='resnet_imagenet_filters_second',dataName='second', dataFolder='resnet_imagenet_data_second', locald ='/local/rcs/wei/PGD/resnet/' )
+                   folderName=net + 'net_imagenet_images_second', filterName=net +'net_imagenet_filters_second',dataName='second', dataFolder=net +'net_imagenet_data_second', locald ='/local/rcs/wei/PGD/' + net + 'net/' )

@@ -1,6 +1,6 @@
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 import PIL
 import tensorflow as tf
@@ -77,6 +77,9 @@ if mode == 'm':
     model.load_weights("./fp_model_40_mobilenet.h5")
     q_model.load_weights("./q_model_40_mobilenet.h5")
     d_model.load_weights("./distilled_fp_model_40_mobilenet.h5")
+    model.trainable = False
+    q_model.trainable = False
+    d_model.trainable = False
     preprocess = tf.keras.applications.mobilenet.preprocess_input
     decode = tf.keras.applications.mobilenet.decode_predictions
     net = 'mobile'
@@ -89,6 +92,9 @@ elif mode == 'r':
     model.load_weights("./fp_model_40_resnet50.h5")
     q_model.load_weights("./q_model_40_resnet50.h5")
     d_model.load_weights("./distilled_fp_model_40_resnet50.h5")
+    model.trainable = False
+    q_model.trainable = False
+    d_model.trainable = False
     preprocess = tf.keras.applications.resnet.preprocess_input
     decode = tf.keras.applications.resnet.decode_predictions
     net = 'res'
@@ -119,6 +125,9 @@ else:
     model.load_weights("./fp_model_40_densenet121.h5")
     q_model.load_weights("./q_model_40_densenet121.h5")
     d_model.load_weights("./distilled_fp_model_40_densenet121.h5")
+    model.trainable = False
+    q_model.trainable = False
+    d_model.trainable = False
     preprocess = tf.keras.applications.densenet.preprocess_input
     decode = tf.keras.applications.densenet.decode_predictions
     net = 'dense'
