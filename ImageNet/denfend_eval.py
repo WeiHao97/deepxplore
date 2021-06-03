@@ -1,6 +1,6 @@
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="3"
+os.environ["CUDA_VISIBLE_DEVICES"]="6"
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 import PIL
 import tensorflow as tf
@@ -106,11 +106,11 @@ if mode == 'm':
     net = 'mobile'
 
 elif mode == 'r':
-    model_ = ResNet50(input_shape= (img_rows, img_cols,3))
+    model_ = tf.keras.applications.ResNet101(input_shape=(224, 224,3))
     q_model = tfmot.quantization.keras.quantize_model(model_)
     model = ResNet50(input_tensor = q_model.input)
     model.load_weights("./fp_model_40_resnet50.h5")
-    q_model.load_weights("./distilled_QAT_40_resnet.h5")
+    q_model.load_weights("./distilled_QAT_40_resnet101.h5")
     model.trainable = False
     q_model.trainable = False
     preprocess = tf.keras.applications.resnet.preprocess_input
@@ -149,11 +149,11 @@ else:
 
 def second(image,label):
     input_image = image
-    orig_logist = tf.identity(model(preprocess(input_image)[None,...]) )
+    orig_logist = tf.identity(model.predict(preprocess(input_image)[None,...]) )
     orig_label =  np.argmax(orig_logist[0])
 
     
-    quant_logist = tf.identity(q_model(preprocess(input_image)[None,...]))
+    quant_logist = tf.identity(q_model.predict(preprocess(input_image)[None,...]))
     quant_label =  np.argmax(quant_logist[0])
 
     
@@ -349,5 +349,10 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
             print("No. worked:", count)
             print("No. topk:", top5)
 
+    print("Number seen:",total)
+    print("No. worked:", count)
+    print("No. topk:", top5)
+
+
 calc_normal_success(second,secondk,mydataset,
-                   folderName=net + 'net_imagenet_images_second', filterName=net +'net_imagenet_filters_second',dataName='second', dataFolder=net +'net_imagenet_data_second', locald ='/local/rcs/wei/defend/solo_distillation_whitebox/' + net + 'net/' )
+                   folderName=net + 'net_imagenet_images_second', filterName=net +'net_imagenet_filters_second',dataName='second', dataFolder=net +'net_imagenet_data_second', locald ='/local/rcs/wei/defend/' + net + 'net101/' )

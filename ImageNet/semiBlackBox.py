@@ -1,6 +1,6 @@
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="4"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 import PIL
 import tensorflow as tf
@@ -77,7 +77,7 @@ def apply_quantization(layer):
     else:
         return tfmot.quantization.keras.quantize_annotate_layer(layer)
 
-mode = 'r'
+mode = 'd'
 BATCH_SIZE = 50
 c = 1
 grad_iterations = 20
@@ -203,20 +203,24 @@ def second(image,label):
         if not label1 == label2:
             if label1 == orig_label and decode(pred1, top=1)[0][0][2] > 0.6:
 
-                if label3 != orig_label:
-                    return -1, -1, -1, -1, -1
-                
-
                 total_time = time.time() - start_time
                 
                 gen_img_deprocessed = test_image_deprocess
                 orig_img_deprocessed = input_image
                 A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
+
+                if label3 != orig_label:
+                    return -1, -1, -1, gen_img_deprocessed, A
                 
                 norm = np.max(np.abs(A))
                 
                 return total_time, norm, iters, gen_img_deprocessed, A
-    return -1, -1, -1, -1, -1
+
+    gen_img_deprocessed = test_image_deprocess
+    orig_img_deprocessed = input_image
+    A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
+
+    return -1, -1, -1, gen_img_deprocessed, A
 
 def topk(model_pred, qmodel_pred, k):
     preds = decode(model_pred, top=k)
@@ -267,21 +271,24 @@ def secondk(image,k):
         if not topk(pred1, pred2, k):
             if label1 == orig_label and decode(pred1, top=1)[0][0][2] > 0.6:
 
+                total_time = time.time() - start_time
+                gen_img_deprocessed = test_image_deprocess
+                orig_img_deprocessed = input_image
+                A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
+                    
+
                 if label3 == orig_label and not topk(pred3, pred2, k):
-        
-                    total_time = time.time() - start_time
-                
-                    gen_img_deprocessed = test_image_deprocess
-                    orig_img_deprocessed = input_image
-                    A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
                     norm = np.max(np.abs(A))
-                
                     return total_time, norm, iters, gen_img_deprocessed, A
 
                 else:
-                    return -1, -1, -1, -1, -1
-            
-    return -1, -1, -1, -1, -1
+                    return -1, -1, -1, gen_img_deprocessed, A
+    
+    gen_img_deprocessed = test_image_deprocess
+    orig_img_deprocessed = input_image
+    A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
+
+    return -1, -1, -1, gen_img_deprocessed, A
 
 def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataName='',dataFolder='',locald = ''):
     
@@ -298,6 +305,7 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
     timeStorek = []
     advdistStorek = []
     stepsStorek = []
+    failure = 0
     
     for i, features in enumerate(ds):
 
@@ -314,17 +322,22 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
 
             if time == -1:
                 print("Didnt find anything")
+                np.save(locald + 'failure/' + folderName+"/"+dataName+str(failure)+"@"+str(total)+".npy", gen)
+                np.save(locald + 'failure/' + folderName+"/"+dataName+str(failure)+"@"+str(total)+".npy", A)
+                failure +=1
                 continue
             
             if time == -2:
                 badimg += 1
                 total -= 1
+                failure +=1
                 print("Bad Image",badimg)
                 continue
                 
             if time == -3:
                 badimg += 1
                 total -= 1
+                failure +=1
                 print("Incorrect Image",badimg)
                 continue
 
@@ -351,6 +364,8 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
             
             if time == -1:
                 print("Didnt find anything in K")
+                np.save(locald + 'failure/' + folderName+"/"+dataName+"k"+str(failure)+".npy", gen)
+                np.save(locald + 'failure/' + folderName+"/"+ dataName+"k"+str(failure)+".npy", A)
                 continue
             
             if time == -2:
@@ -379,6 +394,11 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
             print("No. worked:", count)
             print("No. topk:", top5)
 
+    print("Number seen:",total)
+    print("No. worked:", count)
+    print("No. topk:", top5)
+
+
 
 calc_normal_success(second,secondk,mydataset,
-                   folderName=net + 'net_imagenet_images_second', filterName=net +'net_imagenet_filters_second',dataName='second', dataFolder=net +'net_imagenet_data_second', locald ='/local/rcs/wei/semi_black_box/' + net + 'net/' )
+                   folderName=net + 'net_imagenet_images_second', filterName=net +'net_imagenet_filters_second',dataName='second', dataFolder=net +'net_imagenet_data_second', locald ='/local/rcs/wei/semi_black_box-0-wei/' + net + 'net/' )

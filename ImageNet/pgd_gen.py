@@ -1,6 +1,6 @@
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="3"
+os.environ["CUDA_VISIBLE_DEVICES"]="6"
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 import PIL
 import tensorflow as tf
@@ -82,7 +82,7 @@ c = 1
 grad_iterations = 20
 step = 1
 epsilon = 8
-mode = 'd'
+mode = 'm'
 
 es = {'file_name': tf.TensorSpec(shape=(), dtype=tf.string, name=None),
  'image': tf.TensorSpec(shape=(224, 224, 3), dtype=tf.float32, name=None),
@@ -181,7 +181,7 @@ def second(image,label):
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
         
         if not label1 == label2:
-            if label1 == orig_label and decode(pred1, top=1)[0][0][2] > 0.6:
+            if label1 == orig_label:
                 
 
                 total_time = time.time() - start_time
@@ -193,7 +193,12 @@ def second(image,label):
                 norm = np.max(np.abs(A))
                 
                 return total_time, norm, iters, gen_img_deprocessed, A
-    return -1, -1, -1, -1, -1
+
+    gen_img_deprocessed = test_image_deprocess
+    orig_img_deprocessed = input_image
+    A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
+
+    return -1, -1, -1, gen_img_deprocessed, A
 
 def topk(model_pred, qmodel_pred, k):
     preds = decode(model_pred, top=k)
@@ -236,7 +241,7 @@ def secondk(image,k):
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
         
         if not topk(pred1, pred2, k):
-            if label1 == orig_label and decode(pred1, top=1)[0][0][2] > 0.6:
+            if label1 == orig_label:
         
                 total_time = time.time() - start_time
                 
@@ -247,7 +252,11 @@ def secondk(image,k):
                 
                 return total_time, norm, iters, gen_img_deprocessed, A
             
-    return -1, -1, -1, -1, -1
+    gen_img_deprocessed = test_image_deprocess
+    orig_img_deprocessed = input_image
+    A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
+
+    return -1, -1, -1, gen_img_deprocessed, A
 
 def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataName='',dataFolder='',locald = ''):
     
@@ -264,6 +273,7 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
     timeStorek = []
     advdistStorek = []
     stepsStorek = []
+    failure = 0
     
     for i, features in enumerate(ds):
 
@@ -280,17 +290,22 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
 
             if time == -1:
                 print("Didnt find anything")
+                np.save(locald + 'failure/' + folderName+"/"+dataName+str(failure)+"@"+str(total)+".npy", gen)
+                np.save(locald + 'failure/' + folderName+"/"+dataName+str(failure)+"@"+str(total)+".npy", A)
+                failure +=1
                 continue
             
             if time == -2:
                 badimg += 1
                 total -= 1
+                failure +=1
                 print("Bad Image",badimg)
                 continue
                 
             if time == -3:
                 badimg += 1
                 total -= 1
+                failure +=1
                 print("Incorrect Image",badimg)
                 continue
 
@@ -317,6 +332,8 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
             
             if time == -1:
                 print("Didnt find anything in K")
+                np.save(locald + 'failure/' + folderName+"/"+dataName+"k"+str(failure)+".npy", gen)
+                np.save(locald + 'failure/' + folderName+"/"+ dataName+"k"+str(failure)+".npy", A)
                 continue
             
             if time == -2:
@@ -345,6 +362,10 @@ def calc_normal_success(method, methodk, ds, folderName='', filterName='',dataNa
             print("No. worked:", count)
             print("No. topk:", top5)
 
+    print("Number seen:",total)
+    print("No. worked:", count)
+    print("No. topk:", top5)
+
 
 calc_normal_success(second,secondk,mydataset,
-                   folderName=net + 'net_imagenet_images_second', filterName=net +'net_imagenet_filters_second',dataName='second', dataFolder=net +'net_imagenet_data_second', locald ='/local/rcs/wei/PGD/' + net + 'net/' )
+                   folderName=net + 'net_imagenet_images_second', filterName=net +'net_imagenet_filters_second',dataName='second', dataFolder=net +'net_imagenet_data_second', locald ='/local/rcs/wei/PGD-0/' + net + 'net/' )
