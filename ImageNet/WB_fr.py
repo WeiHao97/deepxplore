@@ -58,16 +58,16 @@ model.load_weights('./fp_model_90_pubface.h5')
 model.trainable = False
 q_model.trainable = False
 
-# # Load the TFLite model and allocate tensors.
-# interpreter = tf.lite.Interpreter(model_path="tflite_int8_model_90.tflite")
-# interpreter.allocate_tensors()
+# Load the TFLite model and allocate tensors.
+interpreter = tf.lite.Interpreter(model_path="tflite_int8_model_90.tflite")
+interpreter.allocate_tensors()
 
-# # Get input and output tensors.
-# input_details = interpreter.get_input_details()
-# output_details = interpreter.get_output_details()
+# Get input and output tensors.
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
 
-# # Test the model on random input data.
-# input_shape = input_details[0]['shape']
+# Test the model on random input data.
+input_shape = input_details[0]['shape']
 
 
 def second(image,label):
@@ -89,43 +89,44 @@ def second(image,label):
     
     A = 0
     start_time = time.time()
-    for iters in range(0, grad_iterations):
+    for iters in range(0,grad_iterations):
+    
         with tf.GradientTape() as g:
             g.watch(input_image)
-            ad_img = preprocess_input_t(input_image + A)[None,...]
-            loss1 = backend.mean(model(ad_img, training = False)[..., orig_label])
-            loss2 = backend.mean(q_model(ad_img, training = False)[..., orig_label])
-            final_loss = backend.mean(loss1 - c*loss2)
+            loss1 = K.mean(model(preprocess_input_t(input_image)[None,...], training = False)[..., orig_label])
+            loss2 = K.mean(q_model(preprocess_input_t(input_image)[None,...], training = False)[..., orig_label])
+            final_loss = K.mean(loss1 - c*loss2)
+
 
         grads = normalize(g.gradient(final_loss, input_image))
-        A += tf.sign(grads) * step
-        A = tf.clip_by_value(A, -epsilon, epsilon)
-        test_image_deprocess = tf.clip_by_value(input_image + A, 0, 255)
-        test_image = preprocess_input_t(test_image_deprocess)[None,...]
+        adv_image = input_image + tf.sign(grads) * step
+        A = tf.clip_by_value(adv_image - orig_img, -epsilon, epsilon)
+        input_image = tf.clip_by_value(orig_img + A, 0, 255)
+        test_image = preprocess_input_t(input_image)[None,...]
         pred1, pred2= model.predict(test_image), q_model.predict(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
 
-        # interpreter.set_tensor(input_details[0]['index'], test_image)
-        # interpreter.invoke()
-        # pred3 = interpreter.get_tensor(output_details[0]['index'])
-        # label3 = np.argmax(pred3[0])
+        interpreter.set_tensor(input_details[0]['index'], test_image)
+        interpreter.invoke()
+        pred3 = interpreter.get_tensor(output_details[0]['index'])
+        label3 = np.argmax(pred3[0])
         
-        if not label1 == label2:
+        if not label1 == label3:
             if label1 == orig_label:
-                
-
+            
                 total_time = time.time() - start_time
                 
-                gen_img_deprocessed = test_image_deprocess
-                orig_img_deprocessed = input_image
+                gen_img_deprocessed = input_image
+                orig_img_deprocessed = orig_img
                 A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
                 
                 norm = np.max(np.abs(A))
                 
                 return total_time, norm, iters, gen_img_deprocessed, A
+            
 
-    gen_img_deprocessed = test_image_deprocess
-    orig_img_deprocessed = input_image
+    gen_img_deprocessed = input_image
+    orig_img_deprocessed = orig_img
     A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
 
     return -1, -1, -1, gen_img_deprocessed, A
@@ -159,37 +160,37 @@ def secondk(image,k):
     for iters in range(0,grad_iterations):
         with tf.GradientTape() as g:
             g.watch(input_image)
-            ad_img = preprocess_input_t(input_image + A)[None,...]
-            loss1 = backend.mean(model(ad_img, training = False)[..., orig_label])
-            loss2 = backend.mean(q_model(ad_img, training = False)[..., orig_label])
-            final_loss = backend.mean(loss1 - c*loss2)
+            loss1 = K.mean(model(preprocess_input_t(input_image)[None,...], training = False)[..., orig_label])
+            loss2 = K.mean(q_model(preprocess_input_t(input_image)[None,...], training = False)[..., orig_label])
+            final_loss = K.mean(loss1 - c*loss2)
+
 
         grads = normalize(g.gradient(final_loss, input_image))
-        A += tf.sign(grads) * step
-        A = tf.clip_by_value(A, -epsilon, epsilon)
-        test_image_deprocess = tf.clip_by_value(input_image + A, 0, 255)
-        test_image = preprocess_input_t(test_image_deprocess)[None,...]
+        adv_image = input_image + tf.sign(grads) * step
+        A = tf.clip_by_value(adv_image - orig_img, -epsilon, epsilon)
+        input_image = tf.clip_by_value(orig_img + A, 0, 255)
+        test_image = preprocess_input_t(input_image)[None,...]
         pred1, pred2= model.predict(test_image), q_model.predict(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
-        # interpreter.set_tensor(input_details[0]['index'], test_image)
-        # interpreter.invoke()
-        # pred3 = interpreter.get_tensor(output_details[0]['index'])
-        # label3 = np.argmax(pred3[0])
+        interpreter.set_tensor(input_details[0]['index'], test_image)
+        interpreter.invoke()
+        pred3 = interpreter.get_tensor(output_details[0]['index'])
+        label3 = np.argmax(pred3[0])
         
-        if not topk(pred1, pred2, k):
+        if not topk(pred1, pred3, k):
             if label1 == orig_label:
         
                 total_time = time.time() - start_time
                 
-                gen_img_deprocessed = test_image_deprocess
-                orig_img_deprocessed = input_image
+                gen_img_deprocessed = input_image
+                orig_img_deprocessed = orig_img
                 A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
                 norm = np.max(np.abs(A))
                 
                 return total_time, norm, iters, gen_img_deprocessed, A
             
-    gen_img_deprocessed = test_image_deprocess
-    orig_img_deprocessed = input_image
+    gen_img_deprocessed = input_image
+    orig_img_deprocessed = orig_img
     A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
 
     return -1, -1, -1, gen_img_deprocessed, A

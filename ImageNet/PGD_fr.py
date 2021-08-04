@@ -87,14 +87,14 @@ def second(image,label):
     for iters in range(0, grad_iterations):
         with tf.GradientTape() as g:
             g.watch(input_image)
-            ad_img = preprocess_input_t(input_image + A)[None,...]
-            final_loss = tf.keras.losses.categorical_crossentropy(orig_logist[0] , q_model(ad_img, training = False)[0])
+            input_image_process = preprocess(input_image)[None,...]
+            final_loss = loss_func(orig_label, q_model(input_image_process, training = False))
 
         grads = normalize(g.gradient(final_loss, input_image))
-        A += tf.sign(grads) * step
-        A = tf.clip_by_value(A, -epsilon, epsilon)
-        test_image_deprocess = tf.clip_by_value(input_image + A, 0, 255)
-        test_image = preprocess_input_t(test_image_deprocess)[None,...]
+        adv_image = input_image + tf.sign(grads) * step
+        A = tf.clip_by_value(adv_image - orig_img, -epsilon, epsilon)
+        input_image = tf.clip_by_value(orig_img + A, 0, 255)
+        test_image = preprocess(input_image)[None,...]
         pred1, pred2= model.predict(test_image), q_model.predict(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
 
@@ -109,16 +109,16 @@ def second(image,label):
 
                 total_time = time.time() - start_time
                 
-                gen_img_deprocessed = test_image_deprocess
-                orig_img_deprocessed = input_image
+                gen_img_deprocessed = input_image
+                orig_img_deprocessed = orig_img
                 A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
                 
                 norm = np.max(np.abs(A))
                 
                 return total_time, norm, iters, gen_img_deprocessed, A
 
-    gen_img_deprocessed = test_image_deprocess
-    orig_img_deprocessed = input_image
+    gen_img_deprocessed = input_image
+    orig_img_deprocessed = orig_img
     A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
 
     return -1, -1, -1, gen_img_deprocessed, A
@@ -152,14 +152,14 @@ def secondk(image,k):
     for iters in range(0,grad_iterations):
         with tf.GradientTape() as g:
             g.watch(input_image)
-            ad_img = preprocess_input_t(input_image + A)[None,...]
-            final_loss = tf.keras.losses.categorical_crossentropy(orig_logist[0] , q_model(ad_img, training = False)[0])
+            input_image_process = preprocess(input_image)[None,...]
+            final_loss = loss_func(orig_label, q_model(input_image_process, training = False))
 
         grads = normalize(g.gradient(final_loss, input_image))
-        A += tf.sign(grads) * step
-        A = tf.clip_by_value(A, -epsilon, epsilon)
-        test_image_deprocess = tf.clip_by_value(input_image + A, 0, 255)
-        test_image = preprocess_input_t(test_image_deprocess)[None,...]
+        adv_image = input_image + tf.sign(grads) * step
+        A = tf.clip_by_value(adv_image - orig_img, -epsilon, epsilon)
+        input_image = tf.clip_by_value(orig_img + A, 0, 255)
+        test_image = preprocess(input_image)[None,...]
         pred1, pred2= model.predict(test_image), q_model.predict(test_image)
         label1, label2 = np.argmax(pred1[0]), np.argmax(pred2[0])
         interpreter.set_tensor(input_details[0]['index'], test_image)
@@ -172,15 +172,15 @@ def secondk(image,k):
         
                 total_time = time.time() - start_time
                 
-                gen_img_deprocessed = test_image_deprocess
-                orig_img_deprocessed = input_image
+                gen_img_deprocessed = input_image
+                orig_img_deprocessed = orig_img
                 A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
                 norm = np.max(np.abs(A))
                 
                 return total_time, norm, iters, gen_img_deprocessed, A
             
-    gen_img_deprocessed = test_image_deprocess
-    orig_img_deprocessed = input_image
+    gen_img_deprocessed = input_image
+    orig_img_deprocessed = orig_img
     A = (gen_img_deprocessed - orig_img_deprocessed).numpy()
 
     return -1, -1, -1, gen_img_deprocessed, A
